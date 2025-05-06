@@ -1,98 +1,101 @@
-# Fusion 360 Python API Script: Eco-Friendly Frying Pan
-# Run via Scripts and Add-Ins in Fusion 360
+# Revised Fusion 360 script: creates pan + ergonomic handle via sweep
+# Entirely automated – user just runs the script
 
-import adsk.core, adsk.fusion, adsk.cam, traceback
+fusion_script_fixed = '''\
+import adsk.core, adsk.fusion, traceback
 
 def run(context):
     ui = None
     try:
+        # Setup
         app = adsk.core.Application.get()
         ui  = app.userInterface
         design = app.activeProduct
-        
-        # Create new component
-        root = design.rootComponent
-        allOcc = root.occurrences
-        trans = adsk.core.Matrix3D.create()
-        panOcc = allOcc.addNewComponent(trans)
-        panComp = panOcc.component
-        panComp.name = 'EcoFryPan'
+        rootComp = design.rootComponent
+        sketches = rootComp.sketches
+        xzPlane = rootComp.xZConstructionPlane
 
-        # Sketch pan profile
-        sketches = panComp.sketches
-        xyPlane = panComp.xYConstructionPlane
-        sketch = sketches.add(xyPlane)
-        sketch.name = 'Pan Profile'
-
-        lines = sketch.sketchCurves.sketchLines
-        arcs = sketch.sketchCurves.sketchArcs
-
-        # Draw half cross-section: bowl shape with arc
-        p1 = adsk.core.Point3D.create(0, 0, 0)
-        p2 = adsk.core.Point3D.create(0, 50, 0)
-        p3 = adsk.core.Point3D.create(30, 50, 0)
-        p4 = adsk.core.Point3D.create(30, 0, 0)
-        
-        lines.addByTwoPoints(p1, p2)
-        arcs.addByThreePoints(p2, adsk.core.Point3D.create(15, 55, 0), p3)
-        lines.addByTwoPoints(p3, p4)
-        lines.addByTwoPoints(p4, p1)
-
-        # Revolve to make body
-        prof = sketch.profiles.item(0)
-        revolves = panComp.features.revolveFeatures
-        revInput = revolves.createInput(prof, sketch.sketchLines.item(0), adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-        angle = adsk.core.ValueInput.createByString('360 deg')
-        revInput.setAngleExtent(False, angle)
-        rev = revolves.add(revInput)
-        panBody = rev.bodies.item(0)
-        panBody.name = 'PanBody'
-
-        # Shell the pan (2.5 mm)
-        shellFeats = panComp.features.shellFeatures
-        shellInput = shellFeats.createInput([panBody.faces.item(0)], True)
-        thickness = adsk.core.ValueInput.createByString('2.5 mm')
-        shellInput.insideThickness = thickness
+        # === PAN BODY ===
+        panSketch = sketches.add(xzPlane)
+        panSketch.name = 'Pan Profile'
+        points = [
+            adsk.core.Point3D.create(0, 0, 0),
+            adsk.core.Point3D.create(130, 0, 0),
+            adsk.core.Point3D.create(130, 40, 0),
+            adsk.core.Point3D.create(120, 45, 0),
+            adsk.core.Point3D.create(0, 45, 0)
+        ]
+        lines = panSketch.sketchCurves.sketchLines
+        for i in range(len(points) - 1):
+            lines.addByTwoPoints(points[i], points[i + 1])
+        lines.addByTwoPoints(points[-1], points[0])
+        axis = lines.addByTwoPoints(adsk.core.Point3D.create(0, -20, 0), adsk.core.Point3D.create(0, 80, 0))
+        axis.isConstruction = True
+        profile = panSketch.profiles.item(0)
+        revolves = rootComp.features.revolveFeatures
+        revInput = revolves.createInput(profile, axis, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+        revInput.setAngleExtent(False, adsk.core.ValueInput.createByString('360 deg'))
+        panBody = revolves.add(revInput).bodies.item(0)
+        panBody.name = "Pan Body"
+        shellFeats = rootComp.features.shellFeatures
+        shellInput = shellFeats.createInput([panBody], True)
+        shellInput.insideThickness = adsk.core.ValueInput.createByString('2.5 mm')
         shellFeats.add(shellInput)
 
-        # Handle Mount
-        handleSketch = sketches.add(xyPlane)
-        handleSketch.name = 'Handle Mount Base'
-        handleRect = handleSketch.sketchCurves.sketchLines
-        handleRect.addCenterPointRectangle(adsk.core.Point3D.create(35, 25, 0), adsk.core.Point3D.create(40, 30, 0))
+        # === HANDLE MOUNT TAB ===
+        tabSketch = sketches.add(xzPlane)
+        tabSketch.name = 'Handle Mount'
+        tabLines = tabSketch.sketchCurves.sketchLines
+        t1 = adsk.core.Point3D.create(130, 30, 0)
+        t2 = adsk.core.Point3D.create(140, 30, 0)
+        t3 = adsk.core.Point3D.create(140, 40, 0)
+        t4 = adsk.core.Point3D.create(130, 40, 0)
+        tabLines.addByTwoPoints(t1, t2)
+        tabLines.addByTwoPoints(t2, t3)
+        tabLines.addByTwoPoints(t3, t4)
+        tabLines.addByTwoPoints(t4, t1)
+        tabProfile = tabSketch.profiles.item(0)
+        extrudes = rootComp.features.extrudeFeatures
+        tabInput = extrudes.createInput(tabProfile, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+        tabInput.setDistanceExtent(False, adsk.core.ValueInput.createByString('5 mm'))
+        tabBody = extrudes.add(tabInput).bodies.item(0)
+        tabBody.name = "Handle Mount Tab"
 
-        prof = handleSketch.profiles.item(0)
-        extrudes = panComp.features.extrudeFeatures
-        extrudeInput = extrudes.createInput(prof, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-        dist = adsk.core.ValueInput.createByString('10 mm')
-        extrudeInput.setDistanceExtent(False, dist)
-        extrudes.add(extrudeInput)
+        # === ERGONOMIC HANDLE ===
+        # Spline path
+        pathSketch = sketches.add(xzPlane)
+        pathSketch.name = 'Handle Path'
+        splinePoints = adsk.core.ObjectCollection.create()
+        splinePoints.add(adsk.core.Point3D.create(140, 35, 0))
+        splinePoints.add(adsk.core.Point3D.create(170, 40, 5))
+        splinePoints.add(adsk.core.Point3D.create(200, 35, 10))
+        splinePoints.add(adsk.core.Point3D.create(230, 30, 15))
+        spline = pathSketch.sketchCurves.sketchFittedSplines.add(splinePoints)
 
-        # Ergonomic Handle (Conceptual sweep path + profile)
-        # This is a guide. You must manually adjust for ergonomic fit
-        handlePathSketch = sketches.add(xyPlane)
-        handlePathSketch.name = 'Handle Path'
-        spline = handlePathSketch.sketchCurves.sketchFittedSplines
-        points = adsk.core.ObjectCollection.create()
-        points.add(adsk.core.Point3D.create(40, 27.5, 0))
-        points.add(adsk.core.Point3D.create(60, 35, 10))
-        points.add(adsk.core.Point3D.create(80, 30, 20))
-        spline.add(points)
+        # Circle profile at start
+        yzPlane = rootComp.yZConstructionPlane
+        profSketch = sketches.add(yzPlane)
+        profSketch.name = 'Handle Profile'
+        center = adsk.core.Point3D.create(140, 35, 0)
+        circle = profSketch.sketchCurves.sketchCircles.addByCenterRadius(center, 5)
 
-        # Sketch handle profile perpendicular to start of spline
-        yzPlane = panComp.yZConstructionPlane
-        handleProfSketch = sketches.add(yzPlane)
-        handleProfSketch.name = 'Handle Profile'
-        handleProfSketch.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(40, 27.5, 0), 4)
+        # Sweep
+        prof = profSketch.profiles.item(0)
+        path = rootComp.features.createPath(spline)
+        sweeps = rootComp.features.sweepFeatures
+        sweepInput = sweeps.createInput(prof, path, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+        sweeps.add(sweepInput)
 
-        # You will need to manually connect this profile to path (due to sketch references)
-        # Go to model UI: Create > Sweep > Select Profile + Path
-
-        # Apply materials manually if needed
-        # app.materialLibraries.itemByName('Fusion 360 Material Library').materials.itemByName('Wood – Bamboo')
-
-        ui.messageBox('Eco Frying Pan base and handle path created. Use Sweep to finalize ergonomic handle.')
+        ui.messageBox("✅ Eco-friendly frying pan with ergonomic handle created!")
 
     except:
         if ui:
             ui.messageBox('Failed:\\n{}'.format(traceback.format_exc()))
+'''
+
+# Save the script to a file for download
+file_path = "/mnt/data/eco_fry_pan_complete.py"
+with open(file_path, "w") as f:
+    f.write(fusion_script_fixed)
+
+file_path
