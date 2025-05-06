@@ -1,0 +1,81 @@
+import adsk.core, adsk.fusion, traceback
+
+def run(context):
+    ui = None
+    try:
+        app = adsk.core.Application.get()
+        ui  = app.userInterface
+        design = app.activeProduct
+        rootComp = design.rootComponent
+
+        # === Create the PAN BODY ===
+        sketches = rootComp.sketches
+        xzPlane = rootComp.xYConstructionPlane
+        panSketch = sketches.add(xzPlane)
+
+        lines = panSketch.sketchCurves.sketchLines
+        arcs = panSketch.sketchCurves.sketchArcs
+
+        # Sketch pan profile
+        p1 = adsk.core.Point3D.create(0, 0, 0)           # center bottom
+        p2 = adsk.core.Point3D.create(135, 0, 0)         # outer bottom
+        p3 = adsk.core.Point3D.create(135, 40, 0)        # outer top
+        arcMid = adsk.core.Point3D.create(70, 45, 0)     # mid arc point
+        p4 = adsk.core.Point3D.create(5, 5, 0)           # bottom curve near center
+
+        # Draw profile
+        base = lines.addByTwoPoints(p1, p2)
+        wall = lines.addByTwoPoints(p2, p3)
+        curve = arcs.addByThreePoints(p3, arcMid, p4)
+        close = lines.addByTwoPoints(p4, p1)
+
+        # Add vertical construction axis
+        axisLine = lines.addByTwoPoints(adsk.core.Point3D.create(0, -10, 0), adsk.core.Point3D.create(0, 100, 0))
+        axisLine.isConstruction = True
+
+        # Revolve the profile
+        profile = panSketch.profiles.item(0)
+        revolves = rootComp.features.revolveFeatures
+        revInput = revolves.createInput(profile, axisLine, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+        angle = adsk.core.ValueInput.createByString('360 deg')
+        revInput.setAngleExtent(False, angle)
+        revolve = revolves.add(revInput)
+
+        # Name the body for clarity
+        revolve.bodies.item(0).name = "Pan Body"
+
+        # === Create the HANDLE ===
+        handleSketch = sketches.add(xzPlane)
+
+        # Position handle base at the outer top of the pan
+        handleBaseX = 135
+        handleBaseY = 35
+        h1 = adsk.core.Point3D.create(handleBaseX, handleBaseY, 0)
+        h2 = adsk.core.Point3D.create(handleBaseX + 100, handleBaseY, 0)
+        h3 = adsk.core.Point3D.create(handleBaseX + 100, handleBaseY + 10, 0)
+        h4 = adsk.core.Point3D.create(handleBaseX, handleBaseY + 10, 0)
+
+        # Draw handle rectangle
+        h_lines = handleSketch.sketchCurves.sketchLines
+        h_lines.addByTwoPoints(h1, h2)
+        h_lines.addByTwoPoints(h2, h3)
+        h_lines.addByTwoPoints(h3, h4)
+        h_lines.addByTwoPoints(h4, h1)
+
+        # Extrude the handle
+        handleProfile = handleSketch.profiles.item(0)
+        extrudes = rootComp.features.extrudeFeatures
+        extInput = extrudes.createInput(handleProfile, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+        distance = adsk.core.ValueInput.createByString('15 mm')
+        extInput.setDistanceExtent(False, distance)
+        handleExtrude = extrudes.add(extInput)
+
+        # Name the handle
+        handleExtrude.bodies.item(0).name = "Wooden Handle"
+
+        # ✅ Done
+        ui.messageBox("Eco-friendly frying pan model created successfully!")
+
+    except:
+        if ui:
+            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
