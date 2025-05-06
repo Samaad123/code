@@ -3,77 +3,77 @@ import adsk.core, adsk.fusion, traceback
 def run(context):
     ui = None
     try:
+        # Set up Fusion
         app = adsk.core.Application.get()
-        ui  = app.userInterface
+        ui = app.userInterface
         design = app.activeProduct
         rootComp = design.rootComponent
 
-        # === Create the PAN BODY ===
+        # === PAN BODY ===
         sketches = rootComp.sketches
         xzPlane = rootComp.xZConstructionPlane
-        panSketch = sketches.add(xzPlane)
+        sketch = sketches.add(xzPlane)
 
-        lines = panSketch.sketchCurves.sketchLines
-        arcs = panSketch.sketchCurves.sketchArcs
+        # Define sketch points (half profile)
+        points = [
+            adsk.core.Point3D.create(0, 0, 0),       # center bottom
+            adsk.core.Point3D.create(130, 0, 0),     # flat bottom out
+            adsk.core.Point3D.create(130, 40, 0),    # vertical wall
+            adsk.core.Point3D.create(120, 45, 0),    # angled lip
+            adsk.core.Point3D.create(0, 45, 0)       # top inner wall
+        ]
 
-        # Define bowl profile (do NOT close at the center!)
-        p1 = adsk.core.Point3D.create(5, 5, 0)           # near bottom center
-        p2 = adsk.core.Point3D.create(135, 0, 0)         # outer bottom
-        p3 = adsk.core.Point3D.create(135, 40, 0)        # outer top edge
-        arcMid = adsk.core.Point3D.create(70, 45, 0)     # mid arc
+        # Draw lines for pan profile
+        lines = sketch.sketchCurves.sketchLines
+        for i in range(len(points) - 1):
+            lines.addByTwoPoints(points[i], points[i + 1])
 
-        # Draw side curve
-        lines.addByTwoPoints(p1, p2)
-        lines.addByTwoPoints(p2, p3)
-        arcs.addByThreePoints(p3, arcMid, p1)  # curve back toward bottom
+        # Close profile to center axis
+        lines.addByTwoPoints(points[-1], points[0])
 
         # Construction axis
-        axisLine = lines.addByTwoPoints(adsk.core.Point3D.create(0, -10, 0), adsk.core.Point3D.create(0, 100, 0))
-        axisLine.isConstruction = True
+        axis = lines.addByTwoPoints(adsk.core.Point3D.create(0, -20, 0), adsk.core.Point3D.create(0, 80, 0))
+        axis.isConstruction = True
 
-        # Revolve open profile
-        profile = panSketch.profiles.item(0)
+        # Revolve to make pan
+        profile = sketch.profiles.item(0)
         revolves = rootComp.features.revolveFeatures
-        revInput = revolves.createInput(profile, axisLine, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+        revInput = revolves.createInput(profile, axis, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
         angle = adsk.core.ValueInput.createByString('360 deg')
         revInput.setAngleExtent(False, angle)
-        panBody = revolves.add(revInput)
-        panBody.bodies.item(0).name = "Pan Body"
+        body = revolves.add(revInput).bodies.item(0)
+        body.name = "Pan Body"
 
-        # === Shell the inside to make it hollow ===
+        # Shell it to hollow inside
         shellFeats = rootComp.features.shellFeatures
-        shellInput = shellFeats.createInput([panBody.bodies.item(0)], True)
-        thickness = adsk.core.ValueInput.createByString('2.5 mm')  # thin walls
-        shellInput.insideThickness = thickness
+        shellInput = shellFeats.createInput([body], True)
+        shellInput.insideThickness = adsk.core.ValueInput.createByString('2.5 mm')
         shellFeats.add(shellInput)
 
         # === HANDLE ===
         handleSketch = sketches.add(xzPlane)
-        startX = 135
-        startY = 35
-        thickness = 10
-        length = 100
 
-        h1 = adsk.core.Point3D.create(startX, startY, 0)
-        h2 = adsk.core.Point3D.create(startX + length, startY, 0)
-        h3 = adsk.core.Point3D.create(startX + length, startY + thickness, 0)
-        h4 = adsk.core.Point3D.create(startX, startY + thickness, 0)
+        # Simple rectangular handle at side of pan
+        h1 = adsk.core.Point3D.create(130, 30, 0)
+        h2 = adsk.core.Point3D.create(230, 30, 0)
+        h3 = adsk.core.Point3D.create(230, 40, 0)
+        h4 = adsk.core.Point3D.create(130, 40, 0)
 
-        h_lines = handleSketch.sketchCurves.sketchLines
-        h_lines.addByTwoPoints(h1, h2)
-        h_lines.addByTwoPoints(h2, h3)
-        h_lines.addByTwoPoints(h3, h4)
-        h_lines.addByTwoPoints(h4, h1)
+        handleLines = handleSketch.sketchCurves.sketchLines
+        handleLines.addByTwoPoints(h1, h2)
+        handleLines.addByTwoPoints(h2, h3)
+        handleLines.addByTwoPoints(h3, h4)
+        handleLines.addByTwoPoints(h4, h1)
 
-        # Extrude handle
-        extrudes = rootComp.features.extrudeFeatures
+        # Extrude handle into a 3D body
         handleProfile = handleSketch.profiles.item(0)
-        extInput = extrudes.createInput(handleProfile, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-        extInput.setDistanceExtent(False, adsk.core.ValueInput.createByString('15 mm'))
-        handleBody = extrudes.add(extInput)
-        handleBody.bodies.item(0).name = "Wooden Handle"
+        extrudes = rootComp.features.extrudeFeatures
+        handleInput = extrudes.createInput(handleProfile, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+        handleInput.setDistanceExtent(False, adsk.core.ValueInput.createByString('15 mm'))
+        handleBody = extrudes.add(handleInput).bodies.item(0)
+        handleBody.name = "Handle"
 
-        ui.messageBox("✅ Hollow frying pan created successfully!")
+        ui.messageBox("✅ Frying pan created successfully!")
 
     except:
         if ui:
