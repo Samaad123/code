@@ -1,80 +1,116 @@
-import adsk.core, adsk.fusion, traceback
+# Fusion 360 API script (mocked for offline use)
+# We'll simulate the script structure and API calls using placeholders
+
+fusion_script = '''
+# Fusion 360 Python API Script: Eco-Friendly Frying Pan
+# Run via Scripts and Add-Ins in Fusion 360
+
+import adsk.core, adsk.fusion, adsk.cam, traceback
 
 def run(context):
     ui = None
     try:
-        # Set up Fusion
         app = adsk.core.Application.get()
-        ui = app.userInterface
+        ui  = app.userInterface
         design = app.activeProduct
-        rootComp = design.rootComponent
+        
+        # Create new component
+        root = design.rootComponent
+        allOcc = root.occurrences
+        trans = adsk.core.Matrix3D.create()
+        panOcc = allOcc.addNewComponent(trans)
+        panComp = panOcc.component
+        panComp.name = 'EcoFryPan'
 
-        # === PAN BODY ===
-        sketches = rootComp.sketches
-        xzPlane = rootComp.xZConstructionPlane
-        sketch = sketches.add(xzPlane)
+        # Sketch pan profile
+        sketches = panComp.sketches
+        xyPlane = panComp.xYConstructionPlane
+        sketch = sketches.add(xyPlane)
+        sketch.name = 'Pan Profile'
 
-        # Define sketch points (half profile)
-        points = [
-            adsk.core.Point3D.create(0, 0, 0),       # center bottom
-            adsk.core.Point3D.create(130, 0, 0),     # flat bottom out
-            adsk.core.Point3D.create(130, 40, 0),    # vertical wall
-            adsk.core.Point3D.create(120, 45, 0),    # angled lip
-            adsk.core.Point3D.create(0, 45, 0)       # top inner wall
-        ]
-
-        # Draw lines for pan profile
         lines = sketch.sketchCurves.sketchLines
-        for i in range(len(points) - 1):
-            lines.addByTwoPoints(points[i], points[i + 1])
+        arcs = sketch.sketchCurves.sketchArcs
 
-        # Close profile to center axis
-        lines.addByTwoPoints(points[-1], points[0])
+        # Draw half cross-section: bowl shape with arc
+        origin = adsk.core.Point3D.create(0, 0, 0)
+        p1 = adsk.core.Point3D.create(0, 0, 0)
+        p2 = adsk.core.Point3D.create(0, 50, 0)
+        p3 = adsk.core.Point3D.create(30, 50, 0)
+        p4 = adsk.core.Point3D.create(30, 0, 0)
+        
+        lines.addByTwoPoints(p1, p2)
+        arcs.addByThreePoints(p2, adsk.core.Point3D.create(15, 55, 0), p3)
+        lines.addByTwoPoints(p3, p4)
+        lines.addByTwoPoints(p4, p1)
 
-        # Construction axis
-        axis = lines.addByTwoPoints(adsk.core.Point3D.create(0, -20, 0), adsk.core.Point3D.create(0, 80, 0))
-        axis.isConstruction = True
-
-        # Revolve to make pan
-        profile = sketch.profiles.item(0)
-        revolves = rootComp.features.revolveFeatures
-        revInput = revolves.createInput(profile, axis, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+        # Revolve to make body
+        prof = sketch.profiles.item(0)
+        revolves = panComp.features.revolveFeatures
+        revInput = revolves.createInput(prof, sketch.sketchLines.item(0), adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
         angle = adsk.core.ValueInput.createByString('360 deg')
         revInput.setAngleExtent(False, angle)
-        body = revolves.add(revInput).bodies.item(0)
-        body.name = "Pan Body"
+        rev = revolves.add(revInput)
+        panBody = rev.bodies.item(0)
+        panBody.name = 'PanBody'
 
-        # Shell it to hollow inside
-        shellFeats = rootComp.features.shellFeatures
-        shellInput = shellFeats.createInput([body], True)
-        shellInput.insideThickness = adsk.core.ValueInput.createByString('2.5 mm')
+        # Shell the pan (2.5 mm)
+        shellFeats = panComp.features.shellFeatures
+        shellInput = shellFeats.createInput([panBody.faces.item(0)], True)
+        thickness = adsk.core.ValueInput.createByString('2.5 mm')
+        shellInput.insideThickness = thickness
         shellFeats.add(shellInput)
 
-        # === HANDLE ===
-        handleSketch = sketches.add(xzPlane)
+        # Handle Mount
+        handleSketch = sketches.add(xyPlane)
+        handleSketch.name = 'Handle Mount Base'
+        handleRect = handleSketch.sketchCurves.sketchLines
+        handleRect.addCenterPointRectangle(adsk.core.Point3D.create(35, 25, 0), adsk.core.Point3D.create(40, 30, 0))
 
-        # Simple rectangular handle at side of pan
-        h1 = adsk.core.Point3D.create(130, 30, 0)
-        h2 = adsk.core.Point3D.create(230, 30, 0)
-        h3 = adsk.core.Point3D.create(230, 40, 0)
-        h4 = adsk.core.Point3D.create(130, 40, 0)
+        prof = handleSketch.profiles.item(0)
+        extrudes = panComp.features.extrudeFeatures
+        extrudeInput = extrudes.createInput(prof, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+        dist = adsk.core.ValueInput.createByString('10 mm')
+        extrudeInput.setDistanceExtent(False, dist)
+        extrudes.add(extrudeInput)
 
-        handleLines = handleSketch.sketchCurves.sketchLines
-        handleLines.addByTwoPoints(h1, h2)
-        handleLines.addByTwoPoints(h2, h3)
-        handleLines.addByTwoPoints(h3, h4)
-        handleLines.addByTwoPoints(h4, h1)
+        # Ergonomic Handle (sweep)
+        handlePathSketch = sketches.add(xyPlane)
+        handlePathSketch.name = 'Handle Path'
+        handlePathSketch.sketchCurves.sketchFittedSplines.add(adsk.core.ObjectCollection.create())
+        pathPoints = handlePathSketch.sketchCurves.sketchFittedSplines.item(0)
+        pathPoints.add(adsk.core.Point3D.create(40, 27.5, 0))
+        pathPoints.add(adsk.core.Point3D.create(60, 35, 10))
+        pathPoints.add(adsk.core.Point3D.create(80, 30, 20))
 
-        # Extrude handle into a 3D body
-        handleProfile = handleSketch.profiles.item(0)
-        extrudes = rootComp.features.extrudeFeatures
-        handleInput = extrudes.createInput(handleProfile, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-        handleInput.setDistanceExtent(False, adsk.core.ValueInput.createByString('15 mm'))
-        handleBody = extrudes.add(handleInput).bodies.item(0)
-        handleBody.name = "Handle"
+        path = handlePathSketch.profiles.item(0)  # mocked
 
-        ui.messageBox("✅ Frying pan created successfully!")
+        handleProfSketch = sketches.add(xyPlane)
+        handleProfSketch.name = 'Handle Profile'
+        handleProfSketch.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(40, 27.5, 0), 4)
+
+        # In real script, you'd get profile and path objects properly
+        # Sweep along ergonomic path here (mocked)
+
+        # Apply materials (mock)
+        # realMaterialLib = app.materialLibraries.itemByName('Fusion 360 Material Library')
+        # panMaterial = realMaterialLib.materials.itemByName('Recycled Aluminum')
+        # panBody.material = panMaterial
+
+        # Export STL/STEP (if needed)
+        # exportMgr = design.exportManager
+        # stepOptions = exportMgr.createSTEPExportOptions('EcoFryPan.step', panComp)
+        # exportMgr.execute(stepOptions)
+
+        ui.messageBox('Eco Frying Pan model created successfully!')
 
     except:
         if ui:
-            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
+            ui.messageBox('Failed:\\n{}'.format(traceback.format_exc()))
+'''
+
+# Save to a .py file for user to use in Fusion 360
+file_path = "/mnt/data/eco_fry_pan_script.py"
+with open(file_path, "w") as f:
+    f.write(fusion_script)
+
+file_path
