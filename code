@@ -10,71 +10,67 @@ def run(context):
 
         # === Create the PAN BODY ===
         sketches = rootComp.sketches
-        xzPlane = rootComp.xYConstructionPlane
+        xzPlane = rootComp.xZConstructionPlane
         panSketch = sketches.add(xzPlane)
 
         lines = panSketch.sketchCurves.sketchLines
         arcs = panSketch.sketchCurves.sketchArcs
 
-        # Sketch pan profile
+        # Define points (bowl shape, 270mm diameter, 40mm tall)
         p1 = adsk.core.Point3D.create(0, 0, 0)           # center bottom
-        p2 = adsk.core.Point3D.create(135, 0, 0)         # outer bottom
-        p3 = adsk.core.Point3D.create(135, 40, 0)        # outer top
-        arcMid = adsk.core.Point3D.create(70, 45, 0)     # mid arc point
-        p4 = adsk.core.Point3D.create(5, 5, 0)           # bottom curve near center
+        p2 = adsk.core.Point3D.create(135, 0, 0)         # outer bottom edge
+        p3 = adsk.core.Point3D.create(135, 40, 0)        # top outer edge
+        arcMid = adsk.core.Point3D.create(60, 50, 0)     # mid arc (for curvature)
+        p4 = adsk.core.Point3D.create(5, 5, 0)           # near bottom
 
-        # Draw profile
-        base = lines.addByTwoPoints(p1, p2)
-        wall = lines.addByTwoPoints(p2, p3)
-        curve = arcs.addByThreePoints(p3, arcMid, p4)
-        close = lines.addByTwoPoints(p4, p1)
+        # Create profile
+        lines.addByTwoPoints(p1, p2)
+        lines.addByTwoPoints(p2, p3)
+        arcs.addByThreePoints(p3, arcMid, p4)
+        lines.addByTwoPoints(p4, p1)
 
-        # Add vertical construction axis
+        # Center axis (construction)
         axisLine = lines.addByTwoPoints(adsk.core.Point3D.create(0, -10, 0), adsk.core.Point3D.create(0, 100, 0))
         axisLine.isConstruction = True
 
-        # Revolve the profile
+        # Revolve
         profile = panSketch.profiles.item(0)
         revolves = rootComp.features.revolveFeatures
         revInput = revolves.createInput(profile, axisLine, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
         angle = adsk.core.ValueInput.createByString('360 deg')
         revInput.setAngleExtent(False, angle)
-        revolve = revolves.add(revInput)
+        panBody = revolves.add(revInput)
+        panBody.bodies.item(0).name = "Pan Body"
 
-        # Name the body for clarity
-        revolve.bodies.item(0).name = "Pan Body"
-
-        # === Create the HANDLE ===
+        # === HANDLE ===
         handleSketch = sketches.add(xzPlane)
 
-        # Position handle base at the outer top of the pan
-        handleBaseX = 135
-        handleBaseY = 35
-        h1 = adsk.core.Point3D.create(handleBaseX, handleBaseY, 0)
-        h2 = adsk.core.Point3D.create(handleBaseX + 100, handleBaseY, 0)
-        h3 = adsk.core.Point3D.create(handleBaseX + 100, handleBaseY + 10, 0)
-        h4 = adsk.core.Point3D.create(handleBaseX, handleBaseY + 10, 0)
+        # Place handle at top edge
+        startX = 135
+        startY = 35
+        thickness = 10
+        length = 100
 
-        # Draw handle rectangle
+        p1 = adsk.core.Point3D.create(startX, startY, 0)
+        p2 = adsk.core.Point3D.create(startX + length, startY, 0)
+        p3 = adsk.core.Point3D.create(startX + length, startY + thickness, 0)
+        p4 = adsk.core.Point3D.create(startX, startY + thickness, 0)
+
         h_lines = handleSketch.sketchCurves.sketchLines
-        h_lines.addByTwoPoints(h1, h2)
-        h_lines.addByTwoPoints(h2, h3)
-        h_lines.addByTwoPoints(h3, h4)
-        h_lines.addByTwoPoints(h4, h1)
+        h_lines.addByTwoPoints(p1, p2)
+        h_lines.addByTwoPoints(p2, p3)
+        h_lines.addByTwoPoints(p3, p4)
+        h_lines.addByTwoPoints(p4, p1)
 
-        # Extrude the handle
-        handleProfile = handleSketch.profiles.item(0)
+        # Extrude handle
         extrudes = rootComp.features.extrudeFeatures
+        handleProfile = handleSketch.profiles.item(0)
         extInput = extrudes.createInput(handleProfile, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-        distance = adsk.core.ValueInput.createByString('15 mm')
-        extInput.setDistanceExtent(False, distance)
-        handleExtrude = extrudes.add(extInput)
+        extInput.setDistanceExtent(False, adsk.core.ValueInput.createByString('15 mm'))
+        handleBody = extrudes.add(extInput)
+        handleBody.bodies.item(0).name = "Wooden Handle"
 
-        # Name the handle
-        handleExtrude.bodies.item(0).name = "Wooden Handle"
-
-        # ✅ Done
-        ui.messageBox("Eco-friendly frying pan model created successfully!")
+        ui.messageBox("✅ Fixed pan created!")
 
     except:
         if ui:
