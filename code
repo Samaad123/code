@@ -1,7 +1,3 @@
-# Fusion 360 API script (mocked for offline use)
-# We'll simulate the script structure and API calls using placeholders
-
-fusion_script = '''
 # Fusion 360 Python API Script: Eco-Friendly Frying Pan
 # Run via Scripts and Add-Ins in Fusion 360
 
@@ -32,7 +28,6 @@ def run(context):
         arcs = sketch.sketchCurves.sketchArcs
 
         # Draw half cross-section: bowl shape with arc
-        origin = adsk.core.Point3D.create(0, 0, 0)
         p1 = adsk.core.Point3D.create(0, 0, 0)
         p2 = adsk.core.Point3D.create(0, 50, 0)
         p3 = adsk.core.Point3D.create(30, 50, 0)
@@ -73,44 +68,31 @@ def run(context):
         extrudeInput.setDistanceExtent(False, dist)
         extrudes.add(extrudeInput)
 
-        # Ergonomic Handle (sweep)
+        # Ergonomic Handle (Conceptual sweep path + profile)
+        # This is a guide. You must manually adjust for ergonomic fit
         handlePathSketch = sketches.add(xyPlane)
         handlePathSketch.name = 'Handle Path'
-        handlePathSketch.sketchCurves.sketchFittedSplines.add(adsk.core.ObjectCollection.create())
-        pathPoints = handlePathSketch.sketchCurves.sketchFittedSplines.item(0)
-        pathPoints.add(adsk.core.Point3D.create(40, 27.5, 0))
-        pathPoints.add(adsk.core.Point3D.create(60, 35, 10))
-        pathPoints.add(adsk.core.Point3D.create(80, 30, 20))
+        spline = handlePathSketch.sketchCurves.sketchFittedSplines
+        points = adsk.core.ObjectCollection.create()
+        points.add(adsk.core.Point3D.create(40, 27.5, 0))
+        points.add(adsk.core.Point3D.create(60, 35, 10))
+        points.add(adsk.core.Point3D.create(80, 30, 20))
+        spline.add(points)
 
-        path = handlePathSketch.profiles.item(0)  # mocked
-
-        handleProfSketch = sketches.add(xyPlane)
+        # Sketch handle profile perpendicular to start of spline
+        yzPlane = panComp.yZConstructionPlane
+        handleProfSketch = sketches.add(yzPlane)
         handleProfSketch.name = 'Handle Profile'
         handleProfSketch.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(40, 27.5, 0), 4)
 
-        # In real script, you'd get profile and path objects properly
-        # Sweep along ergonomic path here (mocked)
+        # You will need to manually connect this profile to path (due to sketch references)
+        # Go to model UI: Create > Sweep > Select Profile + Path
 
-        # Apply materials (mock)
-        # realMaterialLib = app.materialLibraries.itemByName('Fusion 360 Material Library')
-        # panMaterial = realMaterialLib.materials.itemByName('Recycled Aluminum')
-        # panBody.material = panMaterial
+        # Apply materials manually if needed
+        # app.materialLibraries.itemByName('Fusion 360 Material Library').materials.itemByName('Wood – Bamboo')
 
-        # Export STL/STEP (if needed)
-        # exportMgr = design.exportManager
-        # stepOptions = exportMgr.createSTEPExportOptions('EcoFryPan.step', panComp)
-        # exportMgr.execute(stepOptions)
-
-        ui.messageBox('Eco Frying Pan model created successfully!')
+        ui.messageBox('Eco Frying Pan base and handle path created. Use Sweep to finalize ergonomic handle.')
 
     except:
         if ui:
             ui.messageBox('Failed:\\n{}'.format(traceback.format_exc()))
-'''
-
-# Save to a .py file for user to use in Fusion 360
-file_path = "/mnt/data/eco_fry_pan_script.py"
-with open(file_path, "w") as f:
-    f.write(fusion_script)
-
-file_path
